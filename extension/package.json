@@ -1,0 +1,73 @@
+{
+  "name": "codeswap-pvp",
+  "displayName": "CodeSwap PvP",
+  "description": "A VS Code extension for two-player code swapping game",
+  "version": "0.0.1",
+  "publisher": "codeswap-pvp",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codeswap.createSession",
+        "title": "Create Session"
+      },
+      {
+        "command": "codeswap.joinSession",
+        "title": "Join Session"
+      }
+    ],
+    "menus": {
+      "statusBar": [
+        {
+          "command": "codeswap.createSession",
+          "when": "codeswap.connected == false"
+        },
+        {
+          "command": "codeswap.joinSession",
+          "when": "codeswap.connected == false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "CodeSwap PvP",
+      "properties": {
+        "codeswap.serverUrl": {
+          "type": "string",
+          "default": "ws://localhost:8080",
+          "description": "WebSocket URL of the CodeSwap server"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/mocha": "^9.0.0",
+    "@types/node": "16.x",
+    "@types/vscode": "^1.74.0",
+    "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^5.0.0",
+    "@typescript-eslint/parser": "^5.0.0",
+    "eslint": "^8.0.0",
+    "mocha": "^9.1.0",
+    "typescript": "^4.4.3"
+  },
+  "dependencies": {
+    "ws": "^8.12.0"
+  }
+}
