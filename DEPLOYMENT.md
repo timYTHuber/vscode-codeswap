@@ -32,7 +32,7 @@ This guide explains how to deploy the CodeSwap server to a cloud hosting service
    - Copy the public URL (e.g., `https://codeswap-server.onrender.com`)
    - The WebSocket URL will be `wss://codeswap-server.onrender.com`
 
-## Option 2: Deploy to Railway
+## Option 2: Deploy to Railway (Recommended)
 
 1. **Create a Railway account** at https://railway.app
 
@@ -40,17 +40,21 @@ This guide explains how to deploy the CodeSwap server to a cloud hosting service
    - Click "New Project" → "Deploy from GitHub repo"
    - Select this repository
 
-3. **Configure environment**:
-   - Railway auto-detects Node.js projects
+3. **Configure deployment**:
+   - Railway will automatically detect the `railway.toml` config
+   - The config specifies Nixpacks builder and npm start command
    - PORT is automatically set by Railway
 
 4. **Deploy**:
    - Click "Deploy"
-   - Wait for build and deployment
+   - Wait for build and deployment (usually 2-3 minutes)
 
 5. **Get the WebSocket URL**:
-   - In project settings, copy the public domain
-   - WebSocket URL: `wss://your-project.railway.app`
+   - In your Railway project dashboard, go to "Settings" → "Domains"
+   - Copy the public domain (e.g., `codeswap-server.up.railway.app`)
+   - WebSocket URL: `wss://codeswap-server.up.railway.app`
+
+**Note**: The project structure is optimized for Railway with `server.js` and `package.json` in the root directory.
 
 ## Option 3: Deploy to Heroku
 
@@ -100,7 +104,6 @@ After deployment:
 
 For local testing:
 ```bash
-cd server
 npm install
 npm start
 ```
