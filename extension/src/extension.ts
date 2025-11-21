@@ -5,12 +5,62 @@ let statusBarItem: vscode.StatusBarItem;
 let ws: WebSocket | null = null;
 let sessionId: string | null = null;
 let timeLeft = 300; // 5 minutes in seconds
+let isConnected = false;
+
+async function applyCodeToEditor(code: string, language: string) {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+        vscode.window.showWarningMessage('No active editor found for code swap');
+        return;
+    }
+
+    // СОХРАНИТЬ текущий код перед заменой
+    await saveCurrentCode();
+
+    // ЗАМЕНИТЬ весь текст в редакторе
+    const fullRange = new vscode.Range(
+        editor.document.positionAt(0),
+        editor.document.positionAt(editor.document.getText().length)
+    );
+
+    await editor.edit(editBuilder => {
+        editBuilder.replace(fullRange, code);
+    });
+
+    vscode.window.showInformationMessage(`✅ Received ${language} code from partner`);
+}
+
+async function saveCurrentCode() {
+    const editor = vscode.window.activeTextEditor;
+    if (editor && isConnected) {
+        const code = editor.document.getText();
+        const language = editor.document.languageId;
+
+        // ОТПРАВИТЬ серверу текущий код
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'code_update',
+                code: code,
+                language: language
+            }));
+        }
+    }
+}
+
+function setupEditorListener() {
+    vscode.workspace.onDidChangeTextDocument((event) => {
+        if (event.document === vscode.window.activeTextEditor?.document) {
+            saveCurrentCode();
+        }
+    });
+}
 
 function connectToServer() {
     const config = vscode.workspace.getConfiguration('codeswap');
     const serverUrl = config.get('serverUrl', 'ws://localhost:8080');
     ws = new WebSocket(serverUrl);
     ws.on('open', () => {
+        isConnected = true;
         vscode.window.showInformationMessage('Connected to server');
     });
     ws.on('message', (data: Buffer) => {
@@ -18,6 +68,7 @@ function connectToServer() {
         handleMessage(message);
     });
     ws.on('close', () => {
+        isConnected = false;
         vscode.window.showInformationMessage('Disconnected from server');
         timeLeft = 300;
         updateStatusBar();
@@ -27,7 +78,7 @@ function connectToServer() {
     });
 }
 
-function handleMessage(message: any) {
+async function handleMessage(message: any) {
     switch (message.type) {
         case 'session_created':
             sessionId = message.sessionId;
@@ -51,8 +102,8 @@ function handleMessage(message: any) {
             vscode.window.showWarningMessage('⚠️ Code swap in 30 seconds!');
             break;
         case 'code_swap':
-            performSwap(message.code, message.language);
-            vscode.window.showInformationMessage('🔄 Code swapped! New round starting...');
+            await applyCodeToEditor(message.code, message.language);
+            vscode.window.showInformationMessage(`🔄 Code swapped with ${message.sender}!`);
             break;
         case 'error':
             vscode.window.showErrorMessage(`Error: ${message.message}`);
@@ -73,37 +124,13 @@ function updateStatusBar() {
     }
 }
 
-function performSwap(code: string, language: string) {
-    const editor = vscode.window.activeTextEditor;
-    if (editor) {
-        const currentCode = editor.document.getText();
-        const currentLanguage = editor.document.languageId;
-
-        // Send current code to server for storage
-        if (ws && sessionId) {
-            ws.send(JSON.stringify({
-                type: 'swap',
-                sessionId,
-                code: currentCode,
-                language: currentLanguage
-            }));
-        }
-
-        // Replace with received code
-        const fullRange = new vscode.Range(
-            editor.document.positionAt(0),
-            editor.document.positionAt(editor.document.getText().length)
-        );
-        editor.edit(editBuilder => {
-            editBuilder.replace(fullRange, code);
-        });
-    }
-}
 
 export function activate(context: vscode.ExtensionContext) {
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     updateStatusBar();
     statusBarItem.show();
+
+    setupEditorListener();
 
     let createSession = vscode.commands.registerCommand('codeswap.createSession', () => {
         connectToServer();
