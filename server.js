@@ -22,7 +22,19 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 CodeSwap Server running on port ${PORT}`);
 });
 
-const sessions = new Map(); // sessionId -> { player1: ws, player2: ws, codes: {p1: {code:'', language:''}, p2: {code:'', language:''}}, timer: interval }
+const sessions = new Map(); // sessionId -> { players: Set, codes: Map, timer: number, interval: timeout }
+
+function broadcastToSession(sessionId, message) {
+    const session = sessions.get(sessionId);
+    if (!session) return;
+
+    const messageStr = JSON.stringify(message);
+    session.players.forEach(ws => {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(messageStr);
+        }
+    });
+}
 
 wss.on('connection', (ws) => {
     console.log('Client connected');
@@ -34,11 +46,18 @@ wss.on('connection', (ws) => {
 
     ws.on('close', () => {
         console.log('Client disconnected');
-        // Remove from sessions if needed
-        for (const [id, session] of sessions) {
-            if (session.player1 === ws || session.player2 === ws) {
-                if (session.timer) clearInterval(session.timer);
-                sessions.delete(id);
+        // Clean up sessions
+        for (const [sessionId, session] of sessions) {
+            if (session.players.has(ws)) {
+                session.players.delete(ws);
+                if (session.interval) {
+                    clearInterval(session.interval);
+                }
+                // If session becomes empty, remove it
+                if (session.players.size === 0) {
+                    sessions.delete(sessionId);
+                }
+                break;
             }
         }
     });
@@ -60,9 +79,14 @@ function handleMessage(ws, message) {
 
 function createSession(ws) {
     const sessionId = Math.floor(1000 + Math.random() * 9000).toString();
-    sessions.set(sessionId, { player1: ws, player2: null, codes: { p1: { code: '', language: '' }, p2: { code: '', language: '' } }, timer: null });
-    ws.send(JSON.stringify({ type: 'sessionCreated', sessionId }));
-    console.log(`Session ${sessionId} created`);
+    sessions.set(sessionId, {
+        players: new Set([ws]),
+        codes: new Map(),
+        timer: null,
+        interval: null
+    });
+    ws.send(JSON.stringify({ type: 'session_created', sessionId }));
+    console.log(`Session ${sessionId} created, waiting for second player`);
 }
 
 function joinSession(ws, sessionId) {
@@ -71,50 +95,89 @@ function joinSession(ws, sessionId) {
         ws.send(JSON.stringify({ type: 'error', message: 'Session not found' }));
         return;
     }
-    if (session.player2) {
+    if (session.players.size >= 2) {
         ws.send(JSON.stringify({ type: 'error', message: 'Session full' }));
         return;
     }
-    session.player2 = ws;
-    ws.send(JSON.stringify({ type: 'sessionJoined', sessionId }));
-    startTimer(sessionId);
-    console.log(`Player joined session ${sessionId}`);
+
+    session.players.add(ws);
+    ws.send(JSON.stringify({ type: 'player_joined', sessionId }));
+
+    // Start game when both players are connected
+    if (session.players.size === 2) {
+        startGameSession(sessionId);
+    }
+
+    console.log(`Player joined session ${sessionId}, players: ${session.players.size}`);
 }
 
-function startTimer(sessionId) {
+function startGameSession(sessionId) {
     const session = sessions.get(sessionId);
-    if (!session) return;
-    let timeLeft = 300;
-    session.timer = setInterval(() => {
-        timeLeft--;
-        session.player1.send(JSON.stringify({ type: 'timerUpdate', timeLeft }));
-        session.player2.send(JSON.stringify({ type: 'timerUpdate', timeLeft }));
-        if (timeLeft <= 0) {
-            performSwap(sessionId);
-            timeLeft = 300;
+    if (!session || session.players.size !== 2) return;
+
+    // Initialize codes map for both players
+    session.codes.clear();
+    session.players.forEach(ws => session.codes.set(ws, { code: '', language: '' }));
+
+    // Start synchronized timer
+    session.timer = 300; // 5 minutes
+    broadcastToSession(sessionId, { type: 'game_start', timer: session.timer });
+
+    session.interval = setInterval(() => {
+        if (session.timer > 0) {
+            session.timer--;
+
+            // Send timer update to both players
+            broadcastToSession(sessionId, { type: 'timer_update', timer: session.timer });
+
+            // Warning at 30 seconds
+            if (session.timer === 30) {
+                broadcastToSession(sessionId, { type: 'swap_warning' });
+            }
+
+            // Perform swap at 0
+            if (session.timer === 0) {
+                performCodeSwap(sessionId);
+                // Auto-restart timer for next round
+                session.timer = 300;
+            }
         }
     }, 1000);
+
+    console.log(`Game started in session ${sessionId}`);
 }
 
 function handleSwap(ws, message) {
-    const session = sessions.get(message.sessionId);
+    const session = findSessionByPlayer(ws);
     if (!session) return;
-    if (ws === session.player1) {
-        session.codes.p1 = { code: message.code, language: message.language };
-    } else if (ws === session.player2) {
-        session.codes.p2 = { code: message.code, language: message.language };
-    }
+
+    // Store the code for this player
+    session.codes.set(ws, { code: message.code, language: message.language });
 }
 
-function performSwap(sessionId) {
+function performCodeSwap(sessionId) {
     const session = sessions.get(sessionId);
-    if (!session) return;
+    if (!session || session.players.size !== 2) return;
+
+    const players = Array.from(session.players);
+    const player1 = players[0];
+    const player2 = players[1];
+
+    const code1 = session.codes.get(player1);
+    const code2 = session.codes.get(player2);
+
     // Swap codes
-    const temp = session.codes.p1;
-    session.codes.p1 = session.codes.p2;
-    session.codes.p2 = temp;
-    // Send to players
-    session.player1.send(JSON.stringify({ type: 'swap', code: session.codes.p1.code, language: session.codes.p1.language }));
-    session.player2.send(JSON.stringify({ type: 'swap', code: session.codes.p2.code, language: session.codes.p2.language }));
-    console.log(`Swapped in session ${sessionId}`);
+    player1.send(JSON.stringify({ type: 'code_swap', code: code2.code, language: code2.language }));
+    player2.send(JSON.stringify({ type: 'code_swap', code: code1.code, language: code1.language }));
+
+    console.log(`Code swap performed in session ${sessionId}`);
+}
+
+function findSessionByPlayer(ws) {
+    for (const session of sessions.values()) {
+        if (session.players.has(ws)) {
+            return session;
+        }
+    }
+    return null;
 }

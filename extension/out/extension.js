@@ -6,7 +6,6 @@ const ws_1 = require("ws");
 let statusBarItem;
 let ws = null;
 let sessionId = null;
-let timer = null;
 let timeLeft = 300; // 5 minutes in seconds
 function connectToServer() {
     const config = vscode.workspace.getConfiguration('codeswap');
@@ -21,7 +20,8 @@ function connectToServer() {
     });
     ws.on('close', () => {
         vscode.window.showInformationMessage('Disconnected from server');
-        resetTimer();
+        timeLeft = 300;
+        updateStatusBar();
     });
     ws.on('error', (err) => {
         vscode.window.showErrorMessage(`WebSocket error: ${err.message}`);
@@ -29,58 +29,55 @@ function connectToServer() {
 }
 function handleMessage(message) {
     switch (message.type) {
-        case 'sessionCreated':
+        case 'session_created':
             sessionId = message.sessionId;
-            startTimer();
-            break;
-        case 'sessionJoined':
-            sessionId = message.sessionId;
-            startTimer();
-            break;
-        case 'swap':
-            performSwap(message.code, message.language);
-            resetTimer();
-            startTimer();
-            break;
-        case 'timerUpdate':
-            timeLeft = message.timeLeft;
+            vscode.window.showInformationMessage(`Session created: ${sessionId}. Waiting for second player...`);
             updateStatusBar();
             break;
+        case 'player_joined':
+            sessionId = message.sessionId;
+            vscode.window.showInformationMessage('Second player joined! Game starting...');
+            break;
+        case 'game_start':
+            timeLeft = message.timer;
+            vscode.window.showInformationMessage('Game started! CodeSwap timer: 5:00');
+            updateStatusBar();
+            break;
+        case 'timer_update':
+            timeLeft = message.timer;
+            updateStatusBar();
+            break;
+        case 'swap_warning':
+            vscode.window.showWarningMessage('⚠️ Code swap in 30 seconds!');
+            break;
+        case 'code_swap':
+            performSwap(message.code, message.language);
+            vscode.window.showInformationMessage('🔄 Code swapped! New round starting...');
+            break;
+        case 'error':
+            vscode.window.showErrorMessage(`Error: ${message.message}`);
+            break;
     }
-}
-function startTimer() {
-    timeLeft = 300;
-    updateStatusBar();
-    timer = setInterval(() => {
-        timeLeft--;
-        updateStatusBar();
-        if (timeLeft === 30) {
-            vscode.window.showWarningMessage('Swap in 30 seconds!');
-        }
-        if (timeLeft <= 0) {
-            // Swap will be triggered by server
-        }
-    }, 1000);
-}
-function resetTimer() {
-    if (timer) {
-        clearInterval(timer);
-        timer = null;
-    }
-    timeLeft = 300;
-    updateStatusBar();
 }
 function updateStatusBar() {
-    const minutes = Math.floor(timeLeft / 60);
-    const seconds = timeLeft % 60;
-    statusBarItem.text = `CodeSwap: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+    if (!sessionId) {
+        statusBarItem.text = 'CodeSwap: Not connected';
+    }
+    else if (timeLeft === 300 && !ws) {
+        statusBarItem.text = 'CodeSwap: Waiting for players...';
+    }
+    else {
+        const minutes = Math.floor(timeLeft / 60);
+        const seconds = timeLeft % 60;
+        statusBarItem.text = `CodeSwap: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
 }
 function performSwap(code, language) {
     const editor = vscode.window.activeTextEditor;
     if (editor) {
         const currentCode = editor.document.getText();
         const currentLanguage = editor.document.languageId;
-        // Send current code to server
+        // Send current code to server for storage
         if (ws && sessionId) {
             ws.send(JSON.stringify({
                 type: 'swap',
@@ -94,7 +91,6 @@ function performSwap(code, language) {
         editor.edit(editBuilder => {
             editBuilder.replace(fullRange, code);
         });
-        vscode.window.showInformationMessage('Code swapped!');
     }
 }
 function activate(context) {
