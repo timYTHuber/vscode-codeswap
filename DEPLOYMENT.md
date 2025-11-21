@@ -54,7 +54,7 @@ This guide explains how to deploy the CodeSwap server to a cloud hosting service
    - Copy the public domain (e.g., `codeswap-server.up.railway.app`)
    - WebSocket URL: `wss://codeswap-server.up.railway.app`
 
-**Note**: The project structure is optimized for Railway with `server.js` and `package.json` in the root directory.
+**Note**: The project structure is optimized for Railway with `server.js` and `package.json` in the root directory. The server includes a healthcheck endpoint at `/` that returns "CodeSwap Server OK" for Railway's deployment verification.
 
 ## Option 3: Deploy to Heroku
 

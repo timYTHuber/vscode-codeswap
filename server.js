@@ -1,7 +1,15 @@
 const WebSocket = require('ws');
 const http = require('http');
 
-const server = http.createServer();
+const server = http.createServer((req, res) => {
+  if (req.url === '/' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('CodeSwap Server OK');
+    return;
+  }
+  res.writeHead(404);
+  res.end();
+});
 const wss = new WebSocket.Server({
   server,
   perMessageDeflate: false,
@@ -11,7 +19,7 @@ const wss = new WebSocket.Server({
 const PORT = process.env.PORT || 8080;
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`CodeSwap server running on port ${PORT}`);
+  console.log(`🚀 CodeSwap Server running on port ${PORT}`);
 });
 
 const sessions = new Map(); // sessionId -> { player1: ws, player2: ws, codes: {p1: {code:'', language:''}, p2: {code:'', language:''}}, timer: interval }

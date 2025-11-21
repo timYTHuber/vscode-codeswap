@@ -4,5 +4,10 @@ builder = "NIXPACKS"
 [deploy]
 startCommand = "npm start"
 healthcheckPath = "/"
-healthcheckTimeout = 300
+healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
+
+[[services]]
+name = "codeswap-websocket"
+port = 8080
+protocol = "tcp"
