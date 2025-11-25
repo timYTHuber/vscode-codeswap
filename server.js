@@ -10,17 +10,16 @@ const server = http.createServer((req, res) => {
   res.writeHead(404);
   res.end();
 });
-const wss = new WebSocket.Server({
-  server,
-  perMessageDeflate: false,
-  clientTracking: true
+
+const wss = new WebSocket.Server({ noServer: true });
+
+server.on('upgrade', (request, socket, head) => {
+  wss.handleUpgrade(request, socket, head, (ws) => {
+    wss.emit('connection', ws, request);
+  });
 });
 
-const PORT = process.env.PORT || 8080;
-
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 CodeSwap Server running on port ${PORT}`);
-});
+module.exports = server;
 
 const sessions = new Map(); // sessionId -> { players: Map(ws, player), timer: number, interval: timeout }
 

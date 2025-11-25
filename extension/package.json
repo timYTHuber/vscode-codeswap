@@ -2,8 +2,8 @@
   "name": "codeswap-pvp",
   "displayName": "CodeSwap PvP",
   "description": "A VS Code extension for two-player code swapping game",
-  "version": "0.0.1",
-  "publisher": "codeswap-pvp",
+  "version": "1.0.0",
+  "publisher": "TimexSrfox",
   "engines": {
     "vscode": "^1.74.0"
   },

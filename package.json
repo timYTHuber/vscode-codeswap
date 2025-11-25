@@ -1,15 +1,15 @@
 {
   "name": "codeswap-server",
-  "version": "0.0.1",
-  "description": "Server for CodeSwap PvP",
+  "version": "1.0.0",
   "main": "server.js",
-  "engines": {
-    "node": ">=16.0.0"
-  },
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "dependencies": {
-    "ws": "^8.12.0"
+    "ws": "^8.14.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
